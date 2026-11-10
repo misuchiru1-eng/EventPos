@@ -589,7 +589,7 @@
   }
   .cam-open-btn:active { opacity: .7; }
   .cam-overlay {
-    display: none; position: fixed; right: 10px; bottom: 10px; width: 190px;
+    display: none; position: fixed; right: 10px; top: 54px; width: 190px;
     background: #111; border: 2px solid #444; border-radius: 12px; overflow: hidden;
     z-index: 150; flex-direction: column; box-shadow: 0 4px 16px rgba(0,0,0,.35);
     touch-action: none;
@@ -846,6 +846,22 @@ function playCancelSound() {
     g2.gain.setValueAtTime(0.18, now + 0.2);
     g2.gain.exponentialRampToValueAtTime(0.01, now + 0.42);
     osc2.start(now + 0.2); osc2.stop(now + 0.42);
+  } catch(e) {}
+}
+
+// 未登録商品のNG音（低めの「ブッ・ブッ」）
+function playNgSound() {
+  try {
+    const now = audioCtx.currentTime;
+    [0, 0.2].forEach(off => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.type = 'square'; osc.frequency.value = 180;
+      g.gain.setValueAtTime(0.12, now + off);
+      g.gain.exponentialRampToValueAtTime(0.01, now + off + 0.15);
+      osc.start(now + off); osc.stop(now + off + 0.15);
+    });
   } catch(e) {}
 }
 
@@ -1308,6 +1324,7 @@ function processScan(janCode) {
     status.textContent = '✅ ' + product.name;
     status.style.color = 'var(--green)';
   } else {
+    playNgSound();
     status.textContent = '❌ 未登録: ' + janCode;
     status.style.color = 'var(--red)';
   }
