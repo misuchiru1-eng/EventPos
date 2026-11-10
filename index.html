@@ -616,6 +616,43 @@
   }
   .cam-photo-label { display: none; }
   .cam-photo-label.show { display: flex; }
+
+  /* ===== レスポンシブ（スマホ縦・タブレット・横向き） ===== */
+  body { height: 100vh; height: 100dvh; }
+  .main { min-height: 0; }
+  .left-area, .right-area { min-height: 0; min-width: 0; }
+  /* 右エリア全体をスクロール可能に（小さい画面でもボタンに届く） */
+  .right-area { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .total-area { position: sticky; top: 0; z-index: 5; background: var(--surface); }
+  .payment-area { overflow-y: visible; flex: none; }
+  .main { grid-template-columns: 1fr minmax(280px, 340px); }
+
+  /* タブレット縦など中間幅：右を少し細く */
+  @media (max-width: 900px) and (min-width: 721px) {
+    .main { grid-template-columns: 1fr 300px; }
+  }
+
+  /* スマホ縦：上下2段（上＝商品/明細、下＝合計・テンキー・支払をスクロール） */
+  @media (max-width: 720px) {
+    .main { display: flex; flex-direction: column; }
+    .left-area { flex: 0 0 42%; border-right: 0; border-bottom: 2px solid var(--border); }
+    .right-area { flex: 1 1 auto; }
+    .event-name, .logo { font-size: 11px; }
+    .scan-status { font-size: 10px; }
+    .total-area { padding: 8px 12px 6px; }
+    .numpad-btn { padding: 14px 0; }
+    .cam-overlay { width: 150px; }
+    .cam-view { height: 84px; }
+  }
+  @media (max-width: 420px) {
+    .event-name { display: none; }
+  }
+  /* 横向きスマホ（高さが低い） */
+  @media (max-height: 480px) and (orientation: landscape) {
+    .numpad-btn { padding: 8px 0; font-size: 16px; }
+    .cam-overlay { width: 130px; }
+    .cam-view { height: 70px; }
+  }
 </style>
 </head>
 <body>
