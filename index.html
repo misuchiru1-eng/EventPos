@@ -896,7 +896,7 @@ function switchTab(tab) {
 // ===== GAS通信 =====
 // GAS配信(HtmlService)で開く場合は空のままでOK。
 // 外部ホスティング(GitHub Pages等)で開く場合は、GASのウェブアプリURL(/execで終わるURL)を設定する。
-const GAS_URL = '';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyLY5qt8z5xTxNnYt6FveiZYmASB0vr81U0dbmdwrcKPEDgUeSeN82CPhF3RtwqNdXz/exec';
 
 function gasRunner() {
   if (window.google && google.script && google.script.run) return google.script.run;
