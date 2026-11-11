@@ -601,7 +601,7 @@
   .cam-view { position: relative; height: 110px; overflow: hidden; }
   .cam-view video { width: 100%; height: 100%; object-fit: cover; background: #000; }
   .cam-frame {
-    position: absolute; left: 6%; right: 6%; top: 22%; height: 56%;
+    position: absolute; left: 8%; right: 8%; top: 15%; height: 70%;
     border: 2px solid rgba(255,255,255,.85); border-radius: 8px;
     box-shadow: 0 0 0 9999px rgba(0,0,0,.3); pointer-events: none;
   }
@@ -640,9 +640,15 @@
     .event-name, .logo { font-size: 11px; }
     .scan-status { font-size: 10px; }
     .total-area { padding: 8px 12px 6px; }
-    .numpad-btn { padding: 14px 0; }
-    .cam-overlay { width: 150px; }
-    .cam-view { height: 84px; }
+    .numpad-btn { padding: 8px 0; font-size: 16px; }
+    .numpad-grid { gap: 4px; }
+    .numpad-display { min-height: 32px; padding: 4px 8px; font-size: 17px; margin-bottom: 4px; }
+    .numpad-area { padding: 6px 10px; }
+    .numpad-label { margin-bottom: 4px; }
+    .cam-open-btn { min-height: 38px; font-size: 14px; }
+    .pay-btn { padding: 10px 0; }
+    .cam-overlay { width: 170px; }
+    .cam-view { height: 100px; }
   }
   @media (max-width: 420px) {
     .event-name { display: none; }
@@ -1076,23 +1082,23 @@ function initNumpad() {
   if (!grid) return;
 
   grid.querySelectorAll('.numpad-btn').forEach(btn => {
-    // touchstart: スマホで即反応
+    // タップ判定：指がほとんど動かなかった場合のみ入力（動いたらスクロールとみなす）
+    let sx = 0, sy = 0, moved = false;
     btn.addEventListener('touchstart', e => {
-      e.preventDefault(); // クリック遅延をキャンセル
+      const t = e.touches[0]; sx = t.clientX; sy = t.clientY; moved = false;
+    }, { passive: true });
+    btn.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      if (Math.abs(t.clientX - sx) > 8 || Math.abs(t.clientY - sy) > 8) moved = true;
+    }, { passive: true });
+    btn.addEventListener('touchend', e => {
+      if (moved) return;           // スクロール：入力しない
+      e.preventDefault();          // 後続のclick（二重実行）を抑止
       handleNumpad(btn);
     }, { passive: false });
 
-    // click: PC用フォールバック
-    btn.addEventListener('click', e => {
-      // touchstartが発火済みならスキップ（二重実行防止）
-      if (btn._touched) { btn._touched = false; return; }
-      handleNumpad(btn);
-    });
-
-    btn.addEventListener('touchend', () => {
-      btn._touched = true;
-      setTimeout(() => { btn._touched = false; }, 300);
-    });
+    // click: PC用
+    btn.addEventListener('click', () => handleNumpad(btn));
   });
 }
 
@@ -1320,11 +1326,13 @@ function processScan(janCode) {
   const product = products.find(p => p.jan && p.jan.toString() === janCode.toString());
   if (product) {
     playClickSound();
+    if (navigator.vibrate) navigator.vibrate(80);
     addToCart(product, null);
     status.textContent = '✅ ' + product.name;
     status.style.color = 'var(--green)';
   } else {
     playNgSound();
+    if (navigator.vibrate) navigator.vibrate([120, 70, 120]);
     status.textContent = '❌ 未登録: ' + janCode;
     status.style.color = 'var(--red)';
   }
@@ -1372,23 +1380,21 @@ async function openCamera() {
     const video = document.getElementById('camVideo');
     if ('BarcodeDetector' in window) {
       camDetector = new BarcodeDetector({ formats: CAM_FORMATS });
-      camStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-      video.srcObject = camStream;
-      await video.play();
-      camMsg('待機中：バーコードをかざす');
-      camTimer = setInterval(camTick, 150);
     } else {
       await loadZxing();
       const Z = window.ZXing;
       const hints = new Map();
       hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.CODE_128]);
-      camZxing = new Z.BrowserMultiFormatReader(hints, 200);
-      camMsg('待機中：バーコードをかざす');
-      await camZxing.decodeFromConstraints(
-        { video: { facingMode: { ideal: 'environment' } }, audio: false }, video,
-        (result) => { if (result) camHandle(result.getText()); });
+      hints.set(Z.DecodeHintType.TRY_HARDER, true);
+      camZxing = new Z.MultiFormatReader();
+      camZxing.setHints(hints);
     }
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    video.srcObject = camStream;
+    await video.play();
+    camMsg('待機中：枠内にバーコードをかざす');
+    camTimer = setInterval(camTick, 150);
   } catch (e) {
     console.error('camera error', e);
     stopCamera();
@@ -1398,14 +1404,46 @@ async function openCamera() {
   }
 }
 
+// 白枠に相当する範囲だけをvideoから切り出す（object-fit:cover を考慮）
+let camCanvas = null;
+function camCrop() {
+  const v = document.getElementById('camVideo');
+  const vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw || !vh) return null;
+  const vr = v.getBoundingClientRect();
+  const fr = document.getElementById('camFrame').getBoundingClientRect();
+  const sc = Math.max(vr.width / vw, vr.height / vh);
+  const offX = (vw * sc - vr.width) / 2, offY = (vh * sc - vr.height) / 2;
+  let sx = (fr.left - vr.left + offX) / sc, sy = (fr.top - vr.top + offY) / sc;
+  let sw = fr.width / sc, sh = fr.height / sc;
+  sx = Math.max(0, sx); sy = Math.max(0, sy);
+  sw = Math.min(sw, vw - sx); sh = Math.min(sh, vh - sy);
+  if (sw < 20 || sh < 20) return null;
+  if (!camCanvas) camCanvas = document.createElement('canvas');
+  const k = Math.min(1, 640 / sw);
+  camCanvas.width = Math.round(sw * k); camCanvas.height = Math.round(sh * k);
+  camCanvas.getContext('2d', { willReadFrequently: true }).drawImage(v, sx, sy, sw, sh, 0, 0, camCanvas.width, camCanvas.height);
+  return camCanvas;
+}
+
 async function camTick() {
   if (camBusy) return;
-  const v = document.getElementById('camVideo');
-  if (!camDetector || v.readyState < 2) return;
+  const cv = camCrop();
+  if (!cv) return;
   camBusy = true;
   try {
-    const codes = await camDetector.detect(v);
-    if (codes.length) camHandle(codes[0].rawValue);
+    let code = null;
+    if (camDetector) {
+      const r = await camDetector.detect(cv);
+      if (r.length) code = r[0].rawValue;
+    } else if (camZxing) {
+      const Z = window.ZXing;
+      try {
+        const bmp = new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(cv)));
+        code = camZxing.decode(bmp).getText();
+      } catch (e) { /* 見つからない */ }
+    }
+    if (code) camHandle(code);
   } catch (e) { /* 読み取り失敗は無視 */ }
   camBusy = false;
 }
@@ -1418,13 +1456,12 @@ function camHandle(code) {
   fr.classList.add('hit'); setTimeout(() => fr.classList.remove('hit'), 400);
   const known = products.some(p => p.jan && p.jan.toString() === code.toString());
   if (known) {
-    if (navigator.vibrate) navigator.vibrate(60);
     processScan(code);
     const p = products.find(p => p.jan && p.jan.toString() === code.toString());
-    camMsg('✅ ' + p.name, '#7dffb0'); setTimeout(() => { if (camStream || camZxing) camMsg('待機中：バーコードをかざす'); }, 1500);
+    camMsg('✅ ' + p.name, '#7dffb0'); setTimeout(() => { if (camStream) camMsg('待機中：枠内にバーコードをかざす'); }, 1500);
   } else {
     processScan(code);
-    camMsg('❌ 未登録: ' + code, '#ffb4a8'); setTimeout(() => { if (camStream || camZxing) camMsg('待機中：バーコードをかざす'); }, 1500);
+    camMsg('❌ 未登録: ' + code, '#ffb4a8'); setTimeout(() => { if (camStream) camMsg('待機中：枠内にバーコードをかざす'); }, 1500);
   }
 }
 
@@ -1453,8 +1490,7 @@ async function camReadPhoto(input) {
 }
 
 function stopCamera() {
-  clearInterval(camTimer); camTimer = null; camDetector = null;
-  if (camZxing) { try { camZxing.reset(); } catch (e) {} camZxing = null; }
+  clearInterval(camTimer); camTimer = null; camDetector = null; camZxing = null;
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   const v = document.getElementById('camVideo'); if (v) v.srcObject = null;
 }
