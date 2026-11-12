@@ -983,7 +983,7 @@ function switchTab(tab) {
 // ①GAS上で開く場合 …… そのまま（google.script.run を使用）
 // ②社内サーバーで開く場合 …… GAS_URL を空のままにする（同じサーバーの /api/ を呼ぶ）
 // ③GitHub Pages等の外部ホスティングで開く場合 …… GAS_URL にGASの /exec URL を設定
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyLY5qt8z5xTxNnYt6FveiZYmASB0vr81U0dbmdwrcKPEDgUeSeN82CPhF3RtwqNdXz/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxH1yJQveVBjbNIHq-7kP8Iow7hP3icx5VCiXD8_Oj74ZvFFxj1i-hD8BTiU4trCqQ/exec';
 
 function gasRunner() {
   if (window.google && google.script && google.script.run) return google.script.run;
