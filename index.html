@@ -659,6 +659,67 @@
     .cam-overlay { width: 130px; }
     .cam-view { height: 70px; }
   }
+
+  /* ===== v2：支払方法→金額入力→精算 の順 / テンキー4列 / スマホ縦の再設計 ===== */
+  .numpad-grid { grid-template-columns: repeat(4, 1fr); }
+  .numpad-btn.tall { grid-row: span 2; font-size: 16px; }
+  .numpad-btn.wide { grid-column: span 2; }
+  .np-top { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
+  .np-top .numpad-display { flex: 1; min-width: 0; margin-bottom: 0; }
+  .np-top .change-area { flex: 0 0 auto; max-width: 48%; justify-content: center; }
+  .change-area .change-result { font-size: 15px; font-weight: 700; min-height: 0; white-space: nowrap; align-self: center; }
+  .pay-block { padding: 10px 12px 0; flex-shrink: 0; }
+  .action-block { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  .sub-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .sub-actions .clear-btn { margin: 0; }
+  .cancel-sale-btn { background:#fde8e6; border:1px solid #f0c0bc; border-radius:8px; color:var(--red);
+    font-family:var(--mono); font-size:13px; padding:8px; cursor:pointer; min-height:40px; }
+  .right-area .total-area { position: static; }
+
+  .cam-head-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 16px;
+    font-size: 12px; padding: 4px 10px; color: var(--muted); cursor: pointer; flex-shrink: 0; }
+  .cam-head-btn.on { background: #d4e8f8; border-color: #b0d0f0; color: var(--blue); font-weight: 700; }
+  .cam-total { font-size: 12px; text-align: center; color: #ccc; margin-top: 2px; }
+
+  /* カメラ：スマホ縦は上側いっぱいにドッキング */
+  .cam-overlay.dock { right: auto; bottom: auto; border-radius: 0; border: 0; border-bottom: 2px solid #444; box-shadow: none; }
+  .cam-overlay.dock .cam-view { flex: 1; height: auto; min-height: 0; }
+  .cam-overlay.dock .cam-frame { left: 8%; right: 8%; top: 26%; height: 48%; border-width: 3px; }
+  .cam-overlay.dock .cam-msg { font-size: 16px; font-weight: 700; min-height: 22px; }
+  .cam-overlay.dock .cam-total { font-size: 13px; }
+  .cam-overlay.dock .cam-head { cursor: default; }
+  .cam-overlay.dock .cam-photo-label { min-height: 40px; font-size: 14px; }
+
+  @media (max-width: 720px) {
+    .left-area { flex: 1 1 0; min-height: 0; }
+    .right-area { flex: 0 0 auto; max-height: 68%; overflow-y: auto; }
+    .total-area { display: flex; align-items: baseline; gap: 10px; padding: 4px 12px; }
+    .total-label { font-size: 10px; }
+    .total-amount { font-size: 26px; flex: 1; }
+    .item-count { font-size: 12px; }
+    .pay-block { padding: 6px 10px 0; }
+    .pay-btn { min-height: 40px; padding: 0; font-size: 15px; }
+    .numpad-area { padding: 6px 10px; }
+    .numpad-label { display: none; }
+    .np-top { margin-bottom: 4px; }
+    .numpad-display { min-height: 34px; padding: 4px 8px; font-size: 18px; }
+    .numpad-grid { gap: 4px; }
+    .numpad-btn { padding: 0; min-height: 38px; font-size: 17px; }
+    .action-block { padding: 4px 10px 8px; gap: 4px; }
+    .confirm-btn { min-height: 44px; padding: 8px; font-size: 16px; }
+    .sub-actions .clear-btn, .cancel-sale-btn { min-height: 32px; padding: 4px; font-size: 12px; }
+    /* 商品を多く表示：3列・コンパクト */
+    .tab-content { padding: 8px; gap: 8px; }
+    .products-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .product-btn { min-height: 56px; padding: 4px 4px; }
+    .product-btn .pname { font-size: 12px; }
+    .product-btn .pprice { font-size: 13px; }
+    .tab-btn { padding: 9px; font-size: 13px; }
+    .scan-status { display: none; }
+  }
+  @media (max-height: 480px) and (orientation: landscape) {
+    .numpad-btn { min-height: 30px; }
+  }
 </style>
 </head>
 <body>
@@ -674,6 +735,7 @@
   <span class="event-name" id="eventName">店舗名</span>
   <span class="clock" id="clock">--:--:--</span>
   <span class="scan-status" id="scanStatus">📷 待機中</span>
+  <button class="cam-head-btn" id="camHeadBtn" onclick="toggleCamera()">📷 カメラ</button>
 </header>
 
 <div class="main">
@@ -714,59 +776,60 @@
       <div class="item-count" id="itemCountRight">0点</div>
     </div>
 
-    <!-- テンキー -->
-    <div class="numpad-area">
-      <div class="numpad-label">JANコード入力 / 受取金額入力</div>
-      <div class="numpad-display" id="numpadDisplay">　</div>
-      <div class="numpad-grid" id="numpadGrid">
-        <button class="numpad-btn" data-action="input" data-val="7">7</button>
-        <button class="numpad-btn" data-action="input" data-val="8">8</button>
-        <button class="numpad-btn" data-action="input" data-val="9">9</button>
-        <button class="numpad-btn" data-action="input" data-val="4">4</button>
-        <button class="numpad-btn" data-action="input" data-val="5">5</button>
-        <button class="numpad-btn" data-action="input" data-val="6">6</button>
-        <button class="numpad-btn" data-action="input" data-val="1">1</button>
-        <button class="numpad-btn" data-action="input" data-val="2">2</button>
-        <button class="numpad-btn" data-action="input" data-val="3">3</button>
-        <button class="numpad-btn del" data-action="delete">⌫</button>
-        <button class="numpad-btn" data-action="input" data-val="0">0</button>
-        <button class="numpad-btn enter" data-action="enter">確定</button>
-        <button class="numpad-btn scan wide" data-action="scan">📷 JANスキャン</button>
-        <button class="numpad-btn del" data-action="clear">C</button>
-        <button class="cam-open-btn" id="camOpenBtn" onclick="toggleCamera()">📷 カメラスキャン ON/OFF</button>
-      </div>
-    </div>
-
-    <!-- 支払・精算 -->
-    <div class="payment-area">
-      <div class="payment-label">支払方法</div>
+    <!-- ① 支払方法 -->
+    <div class="pay-block">
       <div class="payment-grid">
         <button class="pay-btn" id="btnCash"   onclick="setPayment('cash')">現金</button>
         <button class="pay-btn" id="btnPayPay" onclick="setPayment('paypay')">PayPay</button>
       </div>
+    </div>
 
-      <!-- 現金：受取金額 -->
-      <div class="change-area" id="cashArea">
-        <span class="change-label">受取金額</span>
-        <div class="change-result" id="changeResult"></div>
+    <!-- ② 金額入力（現金のとき受取金額／それ以外はJANコード手入力） -->
+    <div class="numpad-area">
+      <div class="numpad-label" id="numpadLabel">JANコード入力</div>
+      <div class="np-top">
+        <div class="numpad-display" id="numpadDisplay">　</div>
+        <div class="change-area" id="cashArea"><div class="change-result" id="changeResult"></div></div>
       </div>
+      <div class="numpad-grid" id="numpadGrid">
+        <button class="numpad-btn" data-action="input" data-val="7">7</button>
+        <button class="numpad-btn" data-action="input" data-val="8">8</button>
+        <button class="numpad-btn" data-action="input" data-val="9">9</button>
+        <button class="numpad-btn del" data-action="delete">⌫</button>
+        <button class="numpad-btn" data-action="input" data-val="4">4</button>
+        <button class="numpad-btn" data-action="input" data-val="5">5</button>
+        <button class="numpad-btn" data-action="input" data-val="6">6</button>
+        <button class="numpad-btn del" data-action="clear">C</button>
+        <button class="numpad-btn" data-action="input" data-val="1">1</button>
+        <button class="numpad-btn" data-action="input" data-val="2">2</button>
+        <button class="numpad-btn" data-action="input" data-val="3">3</button>
+        <button class="numpad-btn enter tall" data-action="enter">確定</button>
+        <button class="numpad-btn wide" data-action="input" data-val="0">0</button>
+        <button class="numpad-btn" data-action="input" data-val="00">00</button>
+      </div>
+    </div>
 
+    <!-- ③ 精算 -->
+    <div class="action-block">
       <button class="confirm-btn" id="confirmBtn" onclick="checkout()" disabled>支払方法を選択</button>
-      <button class="clear-btn" onclick="clearOrder()">注文クリア</button>
-      <button style="background:#fde8e6;border:1px solid #f0c0bc;border-radius:8px;color:var(--red);font-family:var(--mono);font-size:13px;padding:10px;cursor:pointer;width:100%;min-height:40px;margin-top:2px;" onclick="openCancelModal()">🗑 売上キャンセル</button>
+      <div class="sub-actions">
+        <button class="clear-btn" onclick="clearOrder()">注文クリア</button>
+        <button class="cancel-sale-btn" onclick="openCancelModal()">🗑 売上キャンセル</button>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- カメラスキャン（常時表示の小型プレビュー） -->
 <div class="cam-overlay" id="camOverlay">
-  <div class="cam-head" id="camHead"><span>📷 スキャン中（ドラッグで移動）</span><button onclick="closeCamera()">OFF</button></div>
+  <div class="cam-head" id="camHead"><span id="camHeadTitle">📷 スキャン中（ドラッグで移動）</span><button onclick="closeCamera()">OFF</button></div>
   <div class="cam-view">
     <video id="camVideo" playsinline muted autoplay></video>
     <div class="cam-frame" id="camFrame"></div>
   </div>
   <div class="cam-bar">
     <div class="cam-msg" id="camMsg">起動中...</div>
+    <div class="cam-total" id="camTotal"></div>
     <div class="cam-btns">
       <label class="cam-photo-label" id="camPhotoLabel">📸 撮影して読み取り
         <input type="file" accept="image/*" capture="environment" id="camPhotoInput" style="display:none" onchange="camReadPhoto(this)">
@@ -915,10 +978,11 @@ function switchTab(tab) {
   document.getElementById('tabOrder').classList.toggle('active', tab === 'order');
 }
 
-// ===== GAS通信 =====
-// GAS配信(HtmlService)で開く場合は空のままでOK。
-// 外部ホスティング(GitHub Pages等)で開く場合は、GASのウェブアプリURL(/execで終わるURL)を設定する。
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyLY5qt8z5xTxNnYt6FveiZYmASB0vr81U0dbmdwrcKPEDgUeSeN82CPhF3RtwqNdXz/exec';
+// ===== サーバー通信 =====
+// ①GAS上で開く場合 …… そのまま（google.script.run を使用）
+// ②社内サーバーで開く場合 …… GAS_URL を空のままにする（同じサーバーの /api/ を呼ぶ）
+// ③GitHub Pages等の外部ホスティングで開く場合 …… GAS_URL にGASの /exec URL を設定
+const GAS_URL = '';
 
 function gasRunner() {
   if (window.google && google.script && google.script.run) return google.script.run;
@@ -927,9 +991,10 @@ function gasRunner() {
     if (name === 'withSuccessHandler') return f => { ok = f; return h; };
     if (name === 'withFailureHandler') return f => { ng = f; return h; };
     return (...args) => {
-      if (!GAS_URL) { ng(new Error('GAS_URL未設定')); return; }
-      const url = GAS_URL + '?action=api&fn=' + encodeURIComponent(name) + '&args=' + encodeURIComponent(JSON.stringify(args));
-      fetch(url).then(r => r.json())
+      const req = GAS_URL
+        ? fetch(GAS_URL + '?action=api&fn=' + encodeURIComponent(name) + '&args=' + encodeURIComponent(JSON.stringify(args)))
+        : fetch('api/' + encodeURIComponent(name), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+      req.then(r => r.json())
         .then(j => j.ok ? ok(j.result) : ng(new Error(j.error)))
         .catch(ng);
     };
@@ -1027,7 +1092,13 @@ function clearOrder() {
   switchTab('product');
 }
 
+function updateNumpadLabel() {
+  const el = document.getElementById('numpadLabel');
+  if (el) el.textContent = numpadMode === 'cash' ? '受取金額入力' : 'JANコード入力';
+}
+
 function resetPaymentUI() {
+  updateNumpadLabel();
   document.getElementById('btnCash').className   = 'pay-btn';
   document.getElementById('btnPayPay').className = 'pay-btn';
   document.getElementById('cashArea').classList.remove('show');
@@ -1113,13 +1184,13 @@ function handleNumpad(btn) {
   else if (action === 'delete') numpadDelete();
   else if (action === 'clear')  numpadClear();
   else if (action === 'enter')  numpadEnter();
-  else if (action === 'scan')   numpadScan();
 }
 
 // ===== テンキー =====
 function numpadInput(val) {
   playClickSound();
-  if (numpadValue.length >= 13) return;
+  if (numpadMode === 'cash' && numpadValue === '' && /^0+$/.test(val)) { blurAll(); return; } // 金額の先頭の0は無効
+  if (numpadValue.length + val.length > 13) return;
   numpadValue += val;
   document.getElementById('numpadDisplay').textContent = numpadValue;
   if (numpadMode === 'cash') {
@@ -1163,16 +1234,6 @@ function numpadEnter() {
   blurAll();
 }
 
-function numpadScan() {
-  playClickSound();
-  numpadMode = 'jan';
-  numpadValue = '';
-  document.getElementById('numpadDisplay').textContent = '　';
-  document.getElementById('numpadDisplay').style.color = 'var(--blue)';
-  setTimeout(() => document.getElementById('numpadDisplay').style.color = '', 500);
-  blurAll();
-}
-
 // フォーカスを外してスキャン待機状態を維持
 // テンキー操作直後は一時的にスキャンを無効化して誤検知を防ぐ
 function blurAll() {
@@ -1186,21 +1247,30 @@ function blurAll() {
 function setPayment(method) {
   playClickSound();
   blurAll();
-  paymentMethod = method;
-  numpadValue   = '';
+  const same = (paymentMethod === method);
+  numpadValue    = '';
   receivedAmount = 0;
-  resetPaymentUI();
+  document.getElementById('numpadDisplay').textContent = '　';
+  document.getElementById('changeResult').textContent  = '';
+  document.getElementById('btnCash').className   = 'pay-btn';
+  document.getElementById('btnPayPay').className = 'pay-btn';
+  document.getElementById('cashArea').classList.remove('show');
 
-  document.getElementById(method === 'cash' ? 'btnCash' : 'btnPayPay').className =
-    'pay-btn ' + (method === 'cash' ? 'active-cash' : 'active-paypay');
-
-  if (method === 'cash') {
-    document.getElementById('cashArea').classList.add('show');
-    numpadMode = 'cash';
-    document.getElementById('numpadDisplay').textContent = '　';
-  } else {
+  if (same) {                       // 選択済みをもう一度押す → 解除（JANコード入力に戻る）
+    paymentMethod = null;
     numpadMode = 'jan';
+  } else {
+    paymentMethod = method;
+    document.getElementById(method === 'cash' ? 'btnCash' : 'btnPayPay').className =
+      'pay-btn ' + (method === 'cash' ? 'active-cash' : 'active-paypay');
+    if (method === 'cash') {
+      document.getElementById('cashArea').classList.add('show');
+      numpadMode = 'cash';
+    } else {
+      numpadMode = 'jan';
+    }
   }
+  updateNumpadLabel();
   updateConfirmBtn();
 }
 
@@ -1211,8 +1281,8 @@ function calcChange() {
   if (!receivedAmount) { el.textContent = ''; return; }
   el.style.color = change < 0 ? 'var(--red)' : 'var(--green)';
   el.textContent = change < 0
-    ? `受取 ¥${receivedAmount.toLocaleString()}　不足 ¥${Math.abs(change).toLocaleString()}`
-    : `受取 ¥${receivedAmount.toLocaleString()}　おつり ¥${change.toLocaleString()}`;
+    ? `不足 ¥${Math.abs(change).toLocaleString()}`
+    : `おつり ¥${change.toLocaleString()}`;
   updateConfirmBtn();
 }
 
@@ -1255,7 +1325,15 @@ function checkout() {
   }
 
   gasRunner()
-    .withSuccessHandler(() => showCompleteModal(orderData))
+    .withSuccessHandler(res => {
+      // 複数端末の番号重複を避けるため、サーバーが確定した伝票番号を採用する
+      if (res && res.receiptId) {
+        orderData.receiptId = res.receiptId;
+        const n = parseInt(String(res.receiptId).slice(receiptDatePrefix.length), 10);
+        if (!isNaN(n) && n >= receiptCounter) receiptCounter = n + 1;
+      }
+      showCompleteModal(orderData);
+    })
     .withFailureHandler(err => {
       console.error(err);
       btn.disabled = false;
@@ -1367,11 +1445,42 @@ function toggleCamera() {
   if (document.getElementById('camOverlay').classList.contains('show')) closeCamera(); else openCamera();
 }
 
+const isPhoneLayout = () => window.matchMedia('(max-width: 720px)').matches;
+
+// スマホ縦：商品エリア（画面の上側）にカメラを重ねて広く表示。それ以外は右上の小型プレビュー。
+function layoutCamera() {
+  const ov = document.getElementById('camOverlay');
+  if (!ov.classList.contains('show')) return;
+  const title = document.getElementById('camHeadTitle');
+  if (isPhoneLayout()) {
+    const r = document.querySelector('.left-area').getBoundingClientRect();
+    ov.classList.add('dock');
+    ov.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;`;
+    if (title) title.textContent = '📷 スキャン中';
+  } else {
+    ov.classList.remove('dock');
+    ov.style.cssText = '';
+    if (title) title.textContent = '📷 スキャン中（ドラッグで移動）';
+  }
+}
+window.addEventListener('resize', layoutCamera);
+window.addEventListener('orientationchange', () => setTimeout(layoutCamera, 200));
+
+function updateCamTotal() {
+  const el = document.getElementById('camTotal');
+  if (!el) return;
+  const n = cart.reduce((a, i) => a + i.qty, 0);
+  el.textContent = `合計 ¥${getTotal().toLocaleString()} ／ ${n}点`;
+}
+
 async function openCamera() {
   playClickSound();
   blurAll();
   const ov = document.getElementById('camOverlay');
   ov.classList.add('show');
+  layoutCamera();
+  updateCamTotal();
+  document.getElementById('camHeadBtn').classList.add('on');
   document.getElementById('camPhotoLabel').classList.remove('show');
   camMsg('起動中...');
   camLast = ''; camLastAt = 0;
@@ -1458,7 +1567,8 @@ function camHandle(code) {
   if (known) {
     processScan(code);
     const p = products.find(p => p.jan && p.jan.toString() === code.toString());
-    camMsg('✅ ' + p.name, '#7dffb0'); setTimeout(() => { if (camStream) camMsg('待機中：枠内にバーコードをかざす'); }, 1500);
+    const ci = cart.find(i => i.id === p.id);
+    camMsg('✅ ' + p.name + (ci ? ' ×' + ci.qty : ''), '#7dffb0'); updateCamTotal(); setTimeout(() => { if (camStream) camMsg('待機中：枠内にバーコードをかざす'); }, 1500);
   } else {
     processScan(code);
     camMsg('❌ 未登録: ' + code, '#ffb4a8'); setTimeout(() => { if (camStream) camMsg('待機中：枠内にバーコードをかざす'); }, 1500);
@@ -1498,7 +1608,9 @@ function stopCamera() {
 function closeCamera() {
   playClickSound();
   stopCamera();
-  document.getElementById('camOverlay').classList.remove('show');
+  const ov = document.getElementById('camOverlay');
+  ov.classList.remove('show', 'dock'); ov.style.cssText = '';
+  document.getElementById('camHeadBtn').classList.remove('on');
   blurAll();
 }
 
@@ -1507,7 +1619,7 @@ function closeCamera() {
   const ov = document.getElementById('camOverlay'), head = document.getElementById('camHead');
   let sx, sy, ox, oy, on = false;
   head.addEventListener('pointerdown', e => {
-    if (e.target.tagName === 'BUTTON') return;
+    if (e.target.tagName === 'BUTTON' || ov.classList.contains('dock')) return;
     const r = ov.getBoundingClientRect(); on = true; sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
     head.setPointerCapture(e.pointerId);
   });
