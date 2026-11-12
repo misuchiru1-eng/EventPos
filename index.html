@@ -380,7 +380,7 @@
   }
   .payment-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
     gap: 8px;
   }
   .pay-btn {
@@ -698,7 +698,8 @@
     .total-amount { font-size: 26px; flex: 1; }
     .item-count { font-size: 12px; }
     .pay-block { padding: 6px 10px 0; }
-    .pay-btn { min-height: 40px; padding: 0; font-size: 15px; }
+    .pay-btn { min-height: 40px; padding: 0 4px; font-size: 14px; }
+    .payment-grid { gap: 6px; }
     .numpad-area { padding: 6px 10px; }
     .numpad-label { display: none; }
     .np-top { margin-bottom: 4px; }
@@ -778,10 +779,7 @@
 
     <!-- ① 支払方法 -->
     <div class="pay-block">
-      <div class="payment-grid">
-        <button class="pay-btn" id="btnCash"   onclick="setPayment('cash')">現金</button>
-        <button class="pay-btn" id="btnPayPay" onclick="setPayment('paypay')">PayPay</button>
-      </div>
+      <div class="payment-grid" id="paymentGrid"></div>
     </div>
 
     <!-- ② 金額入力（現金のとき受取金額／それ以外はJANコード手入力） -->
@@ -937,7 +935,9 @@ function playNgSound() {
 // ===== 状態 =====
 let products = [];
 let cart = [];
-let paymentMethod = null;
+let payments = [{ name: '現金', type: 'cash' }, { name: 'PayPay', type: 'other' }]; // 支払方法マスタ（サーバーから上書き）
+let paymentMethod = null; // 選択中の支払方法名
+const payType = () => { const p = payments.find(x => x.name === paymentMethod); return p ? p.type : null; };
 let settings = { eventName: '店舗名', taxIncluded: true };
 let receiptDatePrefix = '';
 let receiptCounter = 1;
@@ -951,6 +951,7 @@ window.onload = () => {
   updateClock();
   setInterval(updateClock, 1000);
   initReceiptPrefix();
+  renderPayments();
   loadData();
   initScanListener();
   initNumpad();
@@ -1013,6 +1014,8 @@ function loadData() {
         receiptDatePrefix = data.receipt.datePrefix;
         receiptCounter    = data.receipt.nextNum;
       }
+      if (data.payments && data.payments.length) payments = data.payments;
+      renderPayments();
       renderProducts();
     })
     .withFailureHandler(() => loadSampleData())
@@ -1020,6 +1023,7 @@ function loadData() {
 }
 
 function loadSampleData() {
+  renderPayments();
   products = [
     {id:1,category:'フード',name:'から揚げ',price:300,jan:''},
     {id:2,category:'フード',name:'焼きそば',price:400,jan:''},
@@ -1094,13 +1098,12 @@ function clearOrder() {
 
 function updateNumpadLabel() {
   const el = document.getElementById('numpadLabel');
-  if (el) el.textContent = numpadMode === 'cash' ? '受取金額入力' : 'JANコード入力';
+  if (el) el.textContent = numpadMode === 'cash' ? (payType() === 'cash' ? '受取金額入力' : '金額（空欄＝合計と同額）') : 'JANコード入力';
 }
 
 function resetPaymentUI() {
   updateNumpadLabel();
-  document.getElementById('btnCash').className   = 'pay-btn';
-  document.getElementById('btnPayPay').className = 'pay-btn';
+  document.querySelectorAll('#paymentGrid .pay-btn').forEach(b => b.className = 'pay-btn');
   document.getElementById('cashArea').classList.remove('show');
   document.getElementById('changeResult').textContent = '';
   document.getElementById('numpadDisplay').textContent = '　';
@@ -1140,7 +1143,7 @@ function renderCart() {
   document.getElementById('itemCount').textContent        = count + '点';
   document.getElementById('itemCountRight').textContent   = count + '点';
   document.getElementById('itemBadge').textContent        = count > 0 ? `(${count})` : '';
-  updateConfirmBtn();
+  if (paymentMethod && numpadMode === 'cash') calcChange(); else updateConfirmBtn();
 }
 
 function getTotal() {
@@ -1244,6 +1247,19 @@ function blurAll() {
 }
 
 // ===== 支払方法 =====
+function renderPayments() {
+  const g = document.getElementById('paymentGrid');
+  if (!g) return;
+  g.innerHTML = '';
+  payments.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'pay-btn';
+    b.textContent = p.name;
+    b.addEventListener('click', () => setPayment(p.name));
+    g.appendChild(b);
+  });
+}
+
 function setPayment(method) {
   playClickSound();
   blurAll();
@@ -1252,8 +1268,7 @@ function setPayment(method) {
   receivedAmount = 0;
   document.getElementById('numpadDisplay').textContent = '　';
   document.getElementById('changeResult').textContent  = '';
-  document.getElementById('btnCash').className   = 'pay-btn';
-  document.getElementById('btnPayPay').className = 'pay-btn';
+  document.querySelectorAll('#paymentGrid .pay-btn').forEach(b => b.className = 'pay-btn');
   document.getElementById('cashArea').classList.remove('show');
 
   if (same) {                       // 選択済みをもう一度押す → 解除（JANコード入力に戻る）
@@ -1261,28 +1276,31 @@ function setPayment(method) {
     numpadMode = 'jan';
   } else {
     paymentMethod = method;
-    document.getElementById(method === 'cash' ? 'btnCash' : 'btnPayPay').className =
-      'pay-btn ' + (method === 'cash' ? 'active-cash' : 'active-paypay');
-    if (method === 'cash') {
-      document.getElementById('cashArea').classList.add('show');
-      numpadMode = 'cash';
-    } else {
-      numpadMode = 'jan';
-    }
+    const btn = [...document.querySelectorAll('#paymentGrid .pay-btn')].find(b => b.textContent === method);
+    if (btn) btn.className = 'pay-btn ' + (payType() === 'cash' ? 'active-cash' : 'active-paypay');
+    document.getElementById('cashArea').classList.add('show');
+    numpadMode = 'cash';            // 現金：受取金額／現金以外：合計と同額（空欄でOK）
   }
   updateNumpadLabel();
-  updateConfirmBtn();
+  if (paymentMethod) calcChange(); else updateConfirmBtn();
 }
 
 function calcChange() {
   const total    = getTotal();
-  const change   = receivedAmount - total;
   const el       = document.getElementById('changeResult');
-  if (!receivedAmount) { el.textContent = ''; return; }
-  el.style.color = change < 0 ? 'var(--red)' : 'var(--green)';
-  el.textContent = change < 0
-    ? `不足 ¥${Math.abs(change).toLocaleString()}`
-    : `おつり ¥${change.toLocaleString()}`;
+  if (payType() === 'cash') {
+    const change = receivedAmount - total;
+    if (!receivedAmount) { el.textContent = ''; return; }
+    el.style.color = change < 0 ? 'var(--red)' : 'var(--green)';
+    el.textContent = change < 0
+      ? `不足 ¥${Math.abs(change).toLocaleString()}`
+      : `おつり ¥${change.toLocaleString()}`;
+  } else {
+    // 現金以外：おつりが出ないため、合計と同額でなければ精算できない
+    if (!receivedAmount) { el.style.color = 'var(--muted)'; el.textContent = '合計と同額'; }
+    else if (receivedAmount !== total) { el.style.color = 'var(--red)'; el.textContent = '合計と不一致'; }
+    else { el.style.color = 'var(--green)'; el.textContent = '合計と一致'; }
+  }
   updateConfirmBtn();
 }
 
@@ -1296,8 +1314,11 @@ function updateConfirmBtn() {
   if (!paymentMethod) {
     btn.disabled = true; btn.textContent = '支払方法を選択'; return;
   }
-  if (paymentMethod === 'cash' && receivedAmount < total) {
+  if (payType() === 'cash' && receivedAmount < total) {
     btn.disabled = true; btn.textContent = '受取金額が不足'; return;
+  }
+  if (payType() !== 'cash' && receivedAmount && receivedAmount !== total) {
+    btn.disabled = true; btn.textContent = '金額が合計と一致しません'; return;
   }
   btn.disabled = false;
   btn.textContent = '精算する →';
@@ -1316,12 +1337,14 @@ function checkout() {
 
   let orderData = { items: cart, total, timestamp: new Date().toISOString(), receiptId };
 
-  if (paymentMethod === 'cash') {
-    orderData.paymentMethod = '現金';
+  orderData.paymentMethod = paymentMethod;
+  orderData.payType = payType();
+  if (payType() === 'cash') {
     orderData.received = receivedAmount;
     orderData.change   = receivedAmount - total;
   } else {
-    orderData.paymentMethod = 'PayPay';
+    orderData.received = total;   // 現金以外は合計と同額・おつりなし
+    orderData.change   = 0;
   }
 
   gasRunner()
@@ -1338,7 +1361,7 @@ function checkout() {
       console.error(err);
       btn.disabled = false;
       btn.textContent = '精算する →';
-      alert('送信エラー。もう一度お試しください。');
+      alert('送信エラー。もう一度お試しください。' + (err && err.message ? '\n' + err.message : ''));
     })
     .recordSale(orderData);
 }
@@ -1357,7 +1380,7 @@ function showCompleteModal(orderData) {
   detail += '─────────────────\n';
   detail += `合計　　¥${orderData.total.toLocaleString()}\n`;
   detail += `支払　　${orderData.paymentMethod}\n`;
-  if (paymentMethod === 'cash') {
+  if (payType() === 'cash') {
     detail += `受取　　¥${orderData.received.toLocaleString()}\n`;
     detail += `おつり　¥${orderData.change.toLocaleString()}`;
   }
